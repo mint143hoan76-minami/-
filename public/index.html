@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>생활선택연구소 — 블로그 초안 도구</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="name">생활선택연구소</span>
+      <span class="sub">블로그 초안 도구</span>
+    </div>
+    <button class="newbtn" id="newBtn">+ 새 글 작성</button>
+    <div class="navlist">
+      <button class="navbtn active" data-view="drafts">작성 중인 글 <span class="count" id="draftCount"></span></button>
+      <button class="navbtn" data-view="done">완료한 글 <span class="count" id="doneCount"></span></button>
+    </div>
+    <div class="draftlist" id="draftList"></div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">새 글 작성</h1>
+      <div class="steps" id="steps"></div>
+    </div>
+    <div class="content" id="content"></div>
+    <div class="footerbar" id="footerbar"></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
