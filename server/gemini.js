@@ -71,4 +71,18 @@ async function generateDraftJson(promptText) {
   }
 }
 
-module.exports = { generateDraftJson };
+// 스크래핑으로 확인된 상품명/설명만 근거로 키워드·강조 포인트 후보를 제안합니다.
+// (없는 사실을 만들어내지 않도록 상품 정보 외 다른 입력은 주지 않습니다.)
+async function suggestKeywords(productName, productDesc) {
+  const prompt = `다음은 실제로 확인된 상품 정보입니다. 이 안의 내용만 근거로 핵심 키워드 후보와 강조 포인트 후보를 추출하세요. 정보에 없는 내용을 추측해서 만들지 마세요.
+
+상품명: ${productName || ""}
+상품 설명: ${productDesc || ""}
+
+다음 JSON 형식으로만 답하세요:
+{"keywords":["핵심 키워드 후보 최대 5개"],"highlights":["강조할 만한 확인된 포인트 후보 최대 5개"]}`;
+  const text = await callGemini(prompt);
+  return parseJsonLoose(text);
+}
+
+module.exports = { generateDraftJson, suggestKeywords };
