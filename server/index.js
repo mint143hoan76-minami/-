@@ -4,10 +4,10 @@ const express = require("express");
 const store = require("./store");
 const { scrapeUrl } = require("./scrape");
 const { buildDraftPrompt } = require("./prompts");
-const { generateDraftJson, suggestKeywords } = require("./gemini");
+const { generateDraftJson, suggestKeywords, extractFromPaste, extractFromImage } = require("./gemini");
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ---- 상품 정보 자동 확인 (실제 서버 스크래핑 + 키워드 제안) ----
@@ -27,6 +27,30 @@ app.post("/api/scrape", async (req, res) => {
         // 키워드 제안 실패는 조용히 넘어갑니다 — 상품 정보 확인 자체는 성공했으므로.
       }
     }
+    res.json(info);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// ---- 자동 접속이 막힌 페이지용: 붙여넣은 내용에서 정보 정리 ----
+app.post("/api/extract", async (req, res) => {
+  const { text } = req.body || {};
+  if (!text || !text.trim()) return res.status(400).json({ error: "붙여넣은 내용이 없습니다." });
+  try {
+    const info = await extractFromPaste(text);
+    res.json(info);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// ---- 자동 접속이 막힌 페이지용: 스크린샷 이미지에서 정보 정리 ----
+app.post("/api/extract-image", async (req, res) => {
+  const { imageBase64, mimeType } = req.body || {};
+  if (!imageBase64) return res.status(400).json({ error: "이미지가 없습니다." });
+  try {
+    const info = await extractFromImage(imageBase64, mimeType);
     res.json(info);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
