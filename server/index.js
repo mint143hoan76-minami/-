@@ -4,18 +4,29 @@ const express = require("express");
 const store = require("./store");
 const { scrapeUrl } = require("./scrape");
 const { buildDraftPrompt } = require("./prompts");
-const { generateDraftJson } = require("./gemini");
+const { generateDraftJson, suggestKeywords } = require("./gemini");
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ---- 상품 정보 자동 확인 (실제 서버 스크래핑) ----
+// ---- 상품 정보 자동 확인 (실제 서버 스크래핑 + 키워드 제안) ----
 app.post("/api/scrape", async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: "url이 필요합니다." });
   try {
     const info = await scrapeUrl(url);
+    // 키워드 제안은 곁가지 기능이라, 실패하거나 API 키가 없어도
+    // 스크래핑 결과 자체는 정상적으로 돌려줍니다.
+    if (process.env.GEMINI_API_KEY && info.productName) {
+      try {
+        const suggestion = await suggestKeywords(info.productName, info.productDesc);
+        info.keywords = Array.isArray(suggestion.keywords) ? suggestion.keywords.slice(0, 5) : [];
+        info.highlights = Array.isArray(suggestion.highlights) ? suggestion.highlights.slice(0, 5) : [];
+      } catch (e) {
+        // 키워드 제안 실패는 조용히 넘어갑니다 — 상품 정보 확인 자체는 성공했으므로.
+      }
+    }
     res.json(info);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
