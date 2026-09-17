@@ -100,4 +100,55 @@ ${snippet}
   return parseJsonLoose(text);
 }
 
-module.exports = { generateDraftJson, suggestKeywords, extractFromPaste };
+// 자동 접속이 막힌 상품 페이지용: 사용자가 직접 찍거나 캡처한 스크린샷 이미지에서
+// 상품 정보를 정리합니다. Gemini의 이미지 인식(멀티모달) 기능을 사용합니다.
+async function extractFromImage(base64Data, mimeType) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw Object.assign(
+      new Error(
+        "GEMINI_API_KEY가 설정되지 않았습니다. .env 파일에 키를 추가한 뒤 서버를 다시 시작하세요."
+      ),
+      { status: 501 }
+    );
+  }
+  const prompt = `이 이미지는 어떤 쇼핑 상품 페이지의 스크린샷입니다. 이미지 안에서 실제로 보이는 정보만 사용해서 아래 항목을 추출하세요. 이미지에 없는 내용을 추측해서 만들지 마세요.
+
+다음 JSON 형식으로만 답하세요:
+{"productName":"상품명 (확인 안 되면 빈 문자열)","productDesc":"확인된 설명·구성·규격을 300자 이내로 요약 (광고 문구·과장 표현 제외)","keywords":["핵심 키워드 후보 최대 5개"],"highlights":["강조할 만한 확인된 포인트 후보 최대 5개"]}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } },
+            ],
+          },
+        ],
+        generationConfig: { responseMimeType: "application/json" },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw Object.assign(
+      new Error(`Gemini API 오류 (${res.status}): ${body.slice(0, 300)}`),
+      { status: 502 }
+    );
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw Object.assign(new Error("이미지에서 정보를 읽지 못했습니다."), { status: 502 });
+  }
+  return parseJsonLoose(text);
+}
+
+module.exports = { generateDraftJson, suggestKeywords, extractFromPaste, extractFromImage };
