@@ -19,6 +19,8 @@ let draftsCache = [];
 let doneCache = [];
 let generating = false, genError = null;
 let scraping = false, scrapeError = null;
+let extracting = false, extractError = null;
+let pasteText = "";
 let aiConfigured = null; // null=unknown, true/false once /api/health responds
 
 function toast(msg){
@@ -95,6 +97,28 @@ async function lookupProduct(){
   }catch(e){
     scraping = false;
     scrapeError = e.message || "상품 정보를 가져오지 못했습니다.";
+    render();
+  }
+}
+
+/* ---------- fallback: paste + AI extract (자동 접속이 막힌 페이지용) ---------- */
+async function extractFromPasteUI(){
+  const raw = (pasteText||"").trim();
+  if(!raw){ extractError = "붙여넣은 내용이 없어요."; render(); return; }
+  extracting = true; extractError = null; render();
+  try{
+    const info = await api("/api/extract", {method:"POST", body: JSON.stringify({text: raw})});
+    if(info.productName) cur.productName = info.productName;
+    if(info.productDesc) cur.productDesc = info.productDesc;
+    if(Array.isArray(info.keywords) && info.keywords.length && cur.mainKeywords.length===0) cur.mainKeywords = info.keywords.slice(0,5);
+    if(Array.isArray(info.highlights) && info.highlights.length && cur.highlightKeywords.length===0) cur.highlightKeywords = info.highlights.slice(0,8);
+    extracting = false;
+    scheduleSave();
+    toast("붙여넣은 내용에서 정보를 정리했어요. 내용을 확인해주세요.");
+    render();
+  }catch(e){
+    extracting = false;
+    extractError = e.message || "정보를 정리하지 못했어요. 다시 시도해주세요.";
     render();
   }
 }
@@ -185,6 +209,7 @@ function renderListView(){
 
 function openDraft(d){
   cur = {...BLANK(), ...d};
+  pasteText = ""; extractError = null;
   view="editor"; render();
 }
 
@@ -242,6 +267,15 @@ function renderStep1(c){
       <div class="hint">서버가 실제로 이 링크에 접속해 상품명·설명·대표 이미지를 가져옵니다.</div>
       ${scrapeError ? `<div style="color:var(--danger);font-size:12px;margin-top:6px;">${escapeHtml(scrapeError)}</div>` : ""}
     </div>
+    <div class="field" style="border:1px dashed var(--line);border-radius:10px;padding:14px 16px;">
+      <label>자동으로 안 될 때: 페이지 내용 붙여넣기</label>
+      <div class="hint" style="margin-top:0;margin-bottom:8px;">일부 쇼핑몰은 서버의 자동 접속을 막아요. 그럴 땐 위 링크를 직접 새 탭에서 열어 페이지 전체를 선택(Ctrl/Cmd+A)해 복사한 뒤 아래에 붙여넣고 버튼을 누르세요. AI가 상품명·설명·키워드를 정리해 채워줍니다.</div>
+      <textarea id="f_paste" placeholder="상품 페이지에서 복사한 내용을 여기에 붙여넣으세요" style="min-height:90px;">${escapeHtml(pasteText)}</textarea>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+        <button class="btn primary" id="extractBtn" ${extracting?'disabled':''}>${extracting?'정리하는 중…':'정보 정리'}</button>
+        ${extractError ? `<span style="color:var(--danger);font-size:12px;">${escapeHtml(extractError)}</span>` : ""}
+      </div>
+    </div>
     <div class="field">
       <label>상품명</label>
       <input type="text" id="f_name" value="${escapeHtml(cur.productName)}" placeholder="정보 확인으로 자동 입력되거나 직접 입력하세요">
@@ -284,6 +318,8 @@ function renderStep1(c){
   bindInput("f_url","productUrl"); bindInput("f_name","productName");
   bindInput("f_desc","productDesc"); bindInput("f_exp","userExperience");
   document.getElementById("lookupBtn").onclick = lookupProduct;
+  document.getElementById("f_paste").oninput = e=>{ pasteText = e.target.value; };
+  document.getElementById("extractBtn").onclick = extractFromPasteUI;
   document.getElementById("f_aff").onchange = e=>{ cur.affiliateStatus=e.target.value; scheduleSave(); };
   document.querySelectorAll('input[name=used]').forEach(r=> r.onchange = ()=>{ cur.usedProduct=r.value; scheduleSave(); render(); });
   bindTagInput("mainKwInput","mainKwAdd","mainKeywords",5);
@@ -427,7 +463,7 @@ function renderFooter(){
 }
 
 /* ---------- nav ---------- */
-document.getElementById("newBtn").onclick = ()=>{ cur = BLANK(); view="editor"; render(); };
+document.getElementById("newBtn").onclick = ()=>{ cur = BLANK(); pasteText=""; extractError=null; view="editor"; render(); };
 document.querySelectorAll(".navbtn").forEach(b=>{ b.onclick = ()=>{ view=b.dataset.view; render(); }; });
 
 /* ---------- init ---------- */
