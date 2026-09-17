@@ -85,4 +85,19 @@ async function suggestKeywords(productName, productDesc) {
   return parseJsonLoose(text);
 }
 
-module.exports = { generateDraftJson, suggestKeywords };
+// 자동 접속이 막힌 상품 페이지용: 사용자가 직접 자기 브라우저로 열어서
+// 복사해 붙여넣은 원문 텍스트에서 상품 정보를 정리합니다.
+async function extractFromPaste(rawText) {
+  const snippet = (rawText || "").slice(0, 6000);
+  const prompt = `다음은 사용자가 어떤 쇼핑 상품 페이지에서 직접 복사해 붙여넣은 텍스트입니다. 이 안에 실제로 있는 정보만 사용해서 아래 항목을 추출하세요. 없는 내용을 추측해서 만들지 마세요.
+
+[붙여넣은 내용]
+${snippet}
+
+다음 JSON 형식으로만 답하세요:
+{"productName":"상품명 (확인 안 되면 빈 문자열)","productDesc":"확인된 설명·구성·규격을 300자 이내로 요약 (광고 문구·과장 표현 제외)","keywords":["핵심 키워드 후보 최대 5개"],"highlights":["강조할 만한 확인된 포인트 후보 최대 5개"]}`;
+  const text = await callGemini(prompt);
+  return parseJsonLoose(text);
+}
+
+module.exports = { generateDraftJson, suggestKeywords, extractFromPaste };
