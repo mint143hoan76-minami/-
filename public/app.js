@@ -20,6 +20,7 @@ let doneCache = [];
 let generating = false, genError = null;
 let scraping = false, scrapeError = null;
 let extracting = false, extractError = null;
+let imageExtracting = false, imageExtractError = null;
 let pasteText = "";
 let aiConfigured = null; // null=unknown, true/false once /api/health responds
 
@@ -123,6 +124,43 @@ async function extractFromPasteUI(){
   }
 }
 
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const result = reader.result; // data:image/png;base64,....
+      const comma = result.indexOf(",");
+      resolve(result.slice(comma+1));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function extractFromImageUI(){
+  const input = document.getElementById("f_image");
+  const file = input?.files?.[0];
+  if(!file){ imageExtractError = "이미지 파일을 먼저 선택해주세요."; render(); return; }
+  if(file.size > 6*1024*1024){ imageExtractError = "이미지가 너무 커요 (6MB 이하로 올려주세요)."; render(); return; }
+  imageExtracting = true; imageExtractError = null; render();
+  try{
+    const base64 = await fileToBase64(file);
+    const info = await api("/api/extract-image", {method:"POST", body: JSON.stringify({imageBase64: base64, mimeType: file.type})});
+    if(info.productName) cur.productName = info.productName;
+    if(info.productDesc) cur.productDesc = info.productDesc;
+    if(Array.isArray(info.keywords) && info.keywords.length && cur.mainKeywords.length===0) cur.mainKeywords = info.keywords.slice(0,5);
+    if(Array.isArray(info.highlights) && info.highlights.length && cur.highlightKeywords.length===0) cur.highlightKeywords = info.highlights.slice(0,8);
+    imageExtracting = false;
+    scheduleSave();
+    toast("이미지에서 정보를 정리했어요. 내용을 확인해주세요.");
+    render();
+  }catch(e){
+    imageExtracting = false;
+    imageExtractError = e.message || "이미지에서 정보를 읽지 못했어요.";
+    render();
+  }
+}
+
 /* ---------- AI draft generation ---------- */
 async function generate(){
   generating = true; genError = null; render();
@@ -209,7 +247,7 @@ function renderListView(){
 
 function openDraft(d){
   cur = {...BLANK(), ...d};
-  pasteText = ""; extractError = null;
+  pasteText = ""; extractError = null; imageExtractError = null;
   view="editor"; render();
 }
 
@@ -275,6 +313,14 @@ function renderStep1(c){
         <button class="btn primary" id="extractBtn" ${extracting?'disabled':''}>${extracting?'정리하는 중…':'정보 정리'}</button>
         ${extractError ? `<span style="color:var(--danger);font-size:12px;">${escapeHtml(extractError)}</span>` : ""}
       </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);">
+        <div class="hint" style="margin-top:0;margin-bottom:8px;">또는 상품 페이지를 스크린샷으로 찍어 올리면, AI가 이미지를 직접 보고 정리해줘요.</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="file" id="f_image" accept="image/*" style="flex:1;">
+          <button class="btn primary" id="extractImageBtn" ${imageExtracting?'disabled':''} style="flex:none;">${imageExtracting?'읽는 중…':'이미지에서 정리'}</button>
+        </div>
+        ${imageExtractError ? `<div style="color:var(--danger);font-size:12px;margin-top:6px;">${escapeHtml(imageExtractError)}</div>` : ""}
+      </div>
     </div>
     <div class="field">
       <label>상품명</label>
@@ -320,6 +366,7 @@ function renderStep1(c){
   document.getElementById("lookupBtn").onclick = lookupProduct;
   document.getElementById("f_paste").oninput = e=>{ pasteText = e.target.value; };
   document.getElementById("extractBtn").onclick = extractFromPasteUI;
+  document.getElementById("extractImageBtn").onclick = extractFromImageUI;
   document.getElementById("f_aff").onchange = e=>{ cur.affiliateStatus=e.target.value; scheduleSave(); };
   document.querySelectorAll('input[name=used]').forEach(r=> r.onchange = ()=>{ cur.usedProduct=r.value; scheduleSave(); render(); });
   bindTagInput("mainKwInput","mainKwAdd","mainKeywords",5);
@@ -463,7 +510,7 @@ function renderFooter(){
 }
 
 /* ---------- nav ---------- */
-document.getElementById("newBtn").onclick = ()=>{ cur = BLANK(); pasteText=""; extractError=null; view="editor"; render(); };
+document.getElementById("newBtn").onclick = ()=>{ cur = BLANK(); pasteText=""; extractError=null; imageExtractError=null; view="editor"; render(); };
 document.querySelectorAll(".navbtn").forEach(b=>{ b.onclick = ()=>{ view=b.dataset.view; render(); }; });
 
 /* ---------- init ---------- */
