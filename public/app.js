@@ -86,9 +86,11 @@ async function lookupProduct(){
     if(info.productName) cur.productName = info.productName;
     if(info.productDesc) cur.productDesc = info.productDesc;
     if(info.image && !cur.images[0]) cur.images[0] = info.image;
+    if(Array.isArray(info.keywords) && info.keywords.length && cur.mainKeywords.length===0) cur.mainKeywords = info.keywords.slice(0,5);
+    if(Array.isArray(info.highlights) && info.highlights.length && cur.highlightKeywords.length===0) cur.highlightKeywords = info.highlights.slice(0,8);
     scraping = false;
     scheduleSave();
-    toast(info.incomplete ? "일부 정보만 확인됐어요. 빈 항목은 직접 채워주세요." : "상품 정보를 가져왔어요.");
+    toast(info.incomplete ? "일부 정보만 확인됐어요. 빈 항목은 직접 채워주세요." : "상품 정보와 키워드를 가져왔어요.");
     render();
   }catch(e){
     scraping = false;
