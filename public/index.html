@@ -195,10 +195,16 @@
   .p-title{font-family:var(--font-voice);font-weight:700;font-size:25px;line-height:1.4;margin:0 0 10px;}
   .p-byline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-faint);margin-bottom:22px;}
   .p-byline .dot{width:20px;height:20px;border-radius:50%;background:var(--accent-bg);}
-  .p-intro{background:var(--surface-2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
-    padding:14px 16px;font-size:14px;line-height:1.8;color:var(--ink-soft);margin-bottom:28px;}
+  .p-intro{font-size:14px;line-height:1.8;color:var(--ink-soft);margin-bottom:24px;}
+  .section-card{border:1px solid var(--line-soft);border-left:3px solid var(--accent);
+    border-radius:0 10px 10px 0;background:var(--surface);margin-bottom:28px;overflow:hidden;}
+  .section-eyebrow{font-size:11.5px;font-weight:700;color:var(--accent-ink);
+    letter-spacing:.02em;padding:16px 20px 0;}
   .p-section{margin-bottom:26px;}
-  .p-h2{font-family:var(--font-voice);font-weight:700;font-size:17px;margin:0 0 10px;}
+  .section-card .p-section{margin-bottom:0;padding:16px 20px;border-top:1px solid var(--line-soft);}
+  .section-card .p-section:first-of-type{border-top:none;padding-top:10px;}
+  .section-card .p-section:last-child{padding-bottom:18px;}
+  .p-h2{font-family:var(--font-voice);font-weight:700;font-size:16px;margin:0 0 8px;}
   .p-body{font-size:14px;line-height:1.85;color:var(--ink);}
   .p-body strong{color:var(--accent-ink);font-weight:700;}
   .img-slot{border:1px dashed var(--line);border-radius:8px;background:var(--surface-2);
@@ -1061,10 +1067,14 @@
     html += '<div class="p-title">'+(d.selectedTitle||'')+'</div>';
     html += '<div class="p-byline"><span class="dot"></span>생활선택연구소 · 초안 생성됨</div>';
     if(d.intro) html += '<div class="p-intro">'+mdBold(d.intro)+'</div>';
-    (d.sections||[]).forEach(s=>{
-      html += '<div class="p-section"><div class="p-h2">'+ (s.heading||'') +'</div>';
-      html += '<div class="p-body">'+mdBold(s.body)+'</div></div>';
-    });
+    if((d.sections||[]).length){
+      html += '<div class="section-card"><div class="section-eyebrow">한눈에 보는 제품 정보</div>';
+      (d.sections||[]).forEach(s=>{
+        html += '<div class="p-section"><div class="p-h2">'+ (s.heading||'') +'</div>';
+        html += '<div class="p-body">'+mdBold(s.body)+'</div></div>';
+      });
+      html += '</div>';
+    }
     if(d.recommendReasons && d.recommendReasons.length){
       html += '<div class="p-section"><div class="p-h2">추천 대상</div><ul class="p-list">';
       d.recommendReasons.forEach(r=> html += '<li>'+mdBold(r)+'</li>');
@@ -1159,15 +1169,150 @@
     if(d.tags && d.tags.length) lines.push(d.tags.map(t=>'#'+t).join(' '));
     return lines.join('\n');
   }
+
+  // 네이버 블로그 에디터(스마트에디터)는 붙여넣기할 때 클립보드의 서식 있는
+  // 텍스트(text/html)를 읽어서 굵게·소제목 등을 그대로 살려줍니다. 일반
+  // 텍스트만 복사하면 이 서식이 전부 사라지므로, 여기서 같은 내용을 간단한
+  // HTML로도 만들어 함께 복사합니다.
+  // 네이버 등 다른 사이트의 에디터에 붙여넣었을 때도 스타일이 최대한 남도록,
+  // <style> 태그가 아니라 각 요소에 직접 style 속성으로 디자인을 입힙니다.
+  function mdBoldInline(text, color){
+    const c = color || 'var(--accent-ink)';
+    return (text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/\*\*([^*]+)\*\*/g,'<b style="color:'+c+';">$1</b>');
+  }
+  function draftToHtml(){
+    const d = state.draft;
+    if(!d) return '';
+    const ACCENT = '#2F6F5B';
+    const ACCENT_BG = '#E4EFE9';
+    const INK = '#1F2A24';
+    const INK_SOFT = '#57625B';
+    const LINE = '#DEE3DA';
+    let html = '<div style="font-family:Malgun Gothic, sans-serif; color:'+INK+'; max-width:640px;">';
+
+    if(d.disclosure){
+      html += '<div style="background:#F4F6F2; border-radius:8px; padding:12px 16px; '
+        + 'font-size:13px; color:'+INK_SOFT+'; margin:0 0 20px; line-height:1.6;">'+mdBoldInline(d.disclosure, ACCENT)+'</div>';
+    }
+    html += '<div style="font-size:24px; font-weight:700; margin:0 0 18px; color:'+INK+';">'+mdBoldInline(d.selectedTitle||'', ACCENT)+'</div>';
+    if(d.intro){
+      html += '<div style="font-size:15px; line-height:1.8; color:'+INK_SOFT+'; margin:0 0 22px;">'+mdBoldInline(d.intro, ACCENT)+'</div>';
+    }
+
+    if((d.sections||[]).length){
+      html += '<div style="border:1px solid '+LINE+'; border-left:4px solid '+ACCENT+'; '
+        + 'border-radius:0 10px 10px 0; margin:0 0 26px; overflow:hidden;">';
+      html += '<div style="font-size:12px; font-weight:700; color:'+ACCENT+'; padding:16px 20px 0; letter-spacing:.02em;">한눈에 보는 제품 정보</div>';
+      d.sections.forEach((s, i)=>{
+        const borderTop = i>0 ? ('border-top:1px solid '+LINE+';') : '';
+        html += '<div style="padding:14px 20px; '+borderTop+'">';
+        html += '<div style="font-size:16px; font-weight:700; margin:0 0 8px; color:'+INK+';">'+mdBoldInline(s.heading||'', ACCENT)+'</div>';
+        html += '<div style="font-size:14.5px; line-height:1.85; color:'+INK+';">'+mdBoldInline(s.body||'', ACCENT)+'</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    if(d.recommendReasons && d.recommendReasons.length){
+      html += '<div style="margin:0 0 26px;">';
+      html += '<div style="font-size:16px; font-weight:700; margin:0 0 10px; color:'+INK+';">추천 대상</div>';
+      html += '<ul style="margin:0; padding-left:20px; font-size:14.5px; line-height:1.9; color:'+INK+';">';
+      d.recommendReasons.forEach(r=> html += '<li style="margin-bottom:4px;">'+mdBoldInline(r, ACCENT)+'</li>');
+      html += '</ul></div>';
+    }
+
+    if(d.faq && d.faq.length){
+      html += '<div style="margin:0 0 26px;">';
+      html += '<div style="font-size:16px; font-weight:700; margin:0 0 12px; color:'+INK+';">FAQ</div>';
+      d.faq.forEach(f=>{
+        html += '<div style="margin-bottom:14px;">';
+        html += '<div style="font-weight:700; font-size:14px; margin-bottom:4px; color:'+INK+';">'
+          + '<span style="color:'+ACCENT+';">Q.</span> '+mdBoldInline(f.q, ACCENT)+'</div>';
+        html += '<div style="font-size:14px; color:'+INK_SOFT+'; line-height:1.7;">'
+          + '<span style="color:#8B9389;">A.</span> '+mdBoldInline(f.a, ACCENT)+'</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    const purl = document.getElementById('productUrl').value.trim();
+    if(purl){
+      html += '<div style="margin:0 0 22px;">';
+      html += '<div style="font-size:16px; font-weight:700; margin:0 0 8px; color:'+INK+';">정품 확인하기</div>';
+      html += '<a href="'+purl.replace(/"/g,'&quot;')+'" style="color:'+ACCENT+';">'+purl+'</a></div>';
+    }
+
+    if(d.conclusion){
+      html += '<div style="background:'+ACCENT_BG+'; border-radius:8px; padding:14px 16px; '
+        + 'font-size:14px; color:'+INK_SOFT+'; line-height:1.8; margin:0 0 22px;">'+mdBoldInline(d.conclusion, ACCENT)+'</div>';
+    }
+    if(d.tags && d.tags.length){
+      html += '<div>';
+      d.tags.forEach(t=> html += '<span style="display:inline-block; font-size:12px; color:'+INK_SOFT+'; '
+        + 'background:#F1F3EF; border-radius:100px; padding:4px 10px; margin:0 6px 6px 0;">#'+t+'</span>');
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // 화면에 보이지 않는 영역에 서식 있는 내용을 실제로 그려 넣고, 그 영역을
+  // 통째로 선택해서 복사합니다(execCommand). Clipboard API로 여러 형식을
+  // 한 번에 쓰는 방식보다 다른 사이트 에디터에 붙여넣을 때 서식이 더 안정적으로
+  // 살아남는 방식이라 이걸 기본으로 씁니다.
+  function copyRichHtml(html){
+    const holder = document.createElement('div');
+    holder.setAttribute('contenteditable', 'true');
+    holder.style.position = 'fixed';
+    holder.style.left = '-9999px';
+    holder.style.top = '0';
+    holder.style.whiteSpace = 'pre-wrap';
+    holder.innerHTML = html;
+    document.body.appendChild(holder);
+
+    const range = document.createRange();
+    range.selectNodeContents(holder);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    let ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e){ ok = false; }
+
+    sel.removeAllRanges();
+    document.body.removeChild(holder);
+    return ok;
+  }
+
   document.getElementById('copyBtn').addEventListener('click', async ()=>{
     const text = draftToPlainText();
     if(!text){ alert('아직 생성된 초안이 없어요.'); return; }
-    try{
-      await navigator.clipboard.writeText(text);
+    const html = draftToHtml();
+    let done = copyRichHtml(html);
+
+    if(!done && window.ClipboardItem){
+      try{
+        const item = new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' })
+        });
+        await navigator.clipboard.write([item]);
+        done = true;
+      }catch(e){ done = false; }
+    }
+    if(!done){
+      try{ await navigator.clipboard.writeText(text); done = true; }catch(e){ done = false; }
+    }
+
+    if(done){
       const t = document.getElementById('copyToast');
+      t.textContent = '서식 있는 상태로 복사했어요 — 네이버 에디터에 붙여넣어보세요';
       t.classList.add('show');
-      setTimeout(()=> t.classList.remove('show'), 1800);
-    }catch(e){ alert('복사에 실패했어요. 직접 선택해 복사해주세요.'); }
+      setTimeout(()=>{ t.classList.remove('show'); t.textContent='클립보드에 복사했어요'; }, 2200);
+    } else {
+      alert('복사에 실패했어요. 직접 선택해 복사해주세요.');
+    }
   });
 
   // ---- 분류(카테고리) 관리 : /api/drafts 안에 type:'meta_categories' 문서 하나로 보관 ----
