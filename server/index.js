@@ -16,6 +16,12 @@ app.post("/api/scrape", async (req, res) => {
   if (!url) return res.status(400).json({ error: "url이 필요합니다." });
   try {
     const info = await scrapeUrl(url);
+    // scrapeUrl은 이제 접속이 막혀도 예외를 던지지 않고 { blocked:true, ... }를
+    // 돌려줍니다. 막힌 경우는 그대로 200으로 응답해, 화면이 오류창 대신
+    // 붙여넣기/스크린샷 안내로 부드럽게 넘어가게 합니다.
+    if (info.blocked) {
+      return res.json(info);
+    }
     // 키워드 제안은 곁가지 기능이라, 실패하거나 API 키가 없어도
     // 스크래핑 결과 자체는 정상적으로 돌려줍니다.
     if (process.env.GEMINI_API_KEY && info.productName) {

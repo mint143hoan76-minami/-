@@ -7,17 +7,27 @@
 // 중간 페이지에서 JS/메타 리프레시로 실제 상품 페이지로 넘어가기 때문에,
 // fetch의 자동 리다이렉트만으로는 그 중간 페이지에서 멈출 수 있습니다.
 // 이런 경우를 감지해 한 번 더 따라갑니다.
+//
+// 헤더 구성: 예전에 실제로 성공했던 버전은 Referer 없이 User-Agent/Accept만
+// 보냈습니다. Referer: naver.com을 붙였더니 오히려 더 잘 막히는 사례가
+// 있었어서, 이번 버전은 그 성공했던 헤더 구성으로 되돌렸습니다.
+//
+// 429(요청 차단)는 코드 문제가 아니라 대상 쇼핑몰이 자동 접속을 막은 것이라
+// 완전히 없앨 수는 없습니다. 대신 같은 헤더로 한 번 더 시도하고, 그래도
+// 막히면 에러를 던지는 대신 "차단됨" 상태를 정상 응답으로 돌려줘서 화면이
+// 놀란 오류창 대신 붙여넣기/스크린샷 쪽으로 부드럽게 안내하게 합니다.
 
 const MAX_HTML_BYTES = 2_000_000; // 2MB 넘게 받지 않음 (이미지/스크립트가 큰 페이지 방지)
 const FETCH_TIMEOUT_MS = 10_000;
-const BROWSER_HEADERS = {
+const RETRY_DELAY_MS = 1_500;
+
+// 성공했던 버전과 동일한 헤더 구성. Referer는 넣지 않습니다.
+const REQUEST_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-  Referer: "https://www.naver.com/",
+  Accept: "text/html,application/xhtml+xml",
 };
+
 // 실제 상품 페이지가 아니라 중간 안내 페이지일 때 흔히 걸리는 제목들.
 // 이 중 하나가 og:title로 잡히면 "아직 진짜 상품 페이지에 도달하지 못했다"는 신호로 봅니다.
 const GENERIC_TITLE_PATTERNS = [/브랜드\s*커넥트/, /쇼핑\s*커넥트/, /^네이버\s*쇼핑$/, /^네이버$/];
@@ -83,7 +93,13 @@ function decodeHtmlEntities(str) {
     .trim();
 }
 
-async function fetchHtml(url) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// 반환값: { ok:true, html, finalUrl } 또는 { ok:false, status, message }
+// (막힌 경우도 예외를 던지지 않고 값으로 돌려줘서, 재시도/차단 안내를 유연하게 처리합니다.)
+async function fetchHtmlOnce(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res;
@@ -91,33 +107,30 @@ async function fetchHtml(url) {
     res = await fetch(url, {
       redirect: "follow",
       signal: controller.signal,
-      headers: BROWSER_HEADERS,
+      headers: REQUEST_HEADERS,
     });
   } catch (e) {
-    throw Object.assign(
-      new Error(
+    clearTimeout(timer);
+    return {
+      ok: false,
+      status: 502,
+      message:
         e.name === "AbortError"
           ? "상품 페이지 응답이 너무 느려 시간 초과됐습니다."
-          : "상품 페이지에 접속하지 못했습니다."
-      ),
-      { status: 502 }
-    );
-  } finally {
-    clearTimeout(timer);
+          : "상품 페이지에 접속하지 못했습니다.",
+    };
   }
+  clearTimeout(timer);
 
   if (res.status === 429) {
-    throw Object.assign(
-      new Error(
-        "이 쇼핑몰이 자동 접속을 일시적으로 차단했어요(429). 잠시 후 다시 시도하거나, 아래 항목에 직접 입력해주세요."
-      ),
-      { status: 429 }
-    );
+    return {
+      ok: false,
+      status: 429,
+      message: "이 쇼핑몰이 자동 접속을 일시적으로 차단했어요(429).",
+    };
   }
   if (!res.ok) {
-    throw Object.assign(new Error(`상품 페이지 응답 오류 (${res.status})`), {
-      status: 502,
-    });
+    return { ok: false, status: 502, message: `상품 페이지 응답 오류 (${res.status})` };
   }
 
   const reader = res.body?.getReader ? res.body.getReader() : null;
@@ -139,7 +152,17 @@ async function fetchHtml(url) {
   } else {
     html = await res.text();
   }
-  return { html, finalUrl: res.url || url };
+  return { ok: true, html, finalUrl: res.url || url };
+}
+
+// 429일 때 같은 헤더로 살짝 지연 후 한 번 더 시도합니다.
+async function fetchHtmlWithRetry(url) {
+  const first = await fetchHtmlOnce(url);
+  if (first.ok) return first;
+  if (first.status !== 429) return first;
+
+  await sleep(RETRY_DELAY_MS + Math.floor(Math.random() * 800));
+  return fetchHtmlOnce(url);
 }
 
 async function scrapeUrl(url) {
@@ -147,7 +170,25 @@ async function scrapeUrl(url) {
     throw Object.assign(new Error("올바른 URL이 아닙니다."), { status: 400 });
   }
 
-  let { html, finalUrl } = await fetchHtml(url);
+  const first = await fetchHtmlWithRetry(url);
+  if (!first.ok) {
+    // 예외를 던지지 않고 "차단됨" 상태를 정상적인 결과로 돌려줍니다.
+    // 라우트(index.js)에서 이 모양을 보고 200으로 응답해, 화면이 곧바로
+    // 붙여넣기/스크린샷 쪽으로 안내할 수 있게 합니다.
+    return {
+      blocked: true,
+      status: first.status,
+      message:
+        first.status === 429
+          ? "이 쇼핑몰이 자동 접속을 반복적으로 차단하고 있어요. 시간을 두고 다시 시도하거나, 아래 붙여넣기/스크린샷 방법을 이용해주세요."
+          : first.message + " 아래 붙여넣기/스크린샷 방법을 이용해주세요.",
+      productName: "",
+      productDesc: "",
+      image: "",
+    };
+  }
+
+  let { html, finalUrl } = first;
   let productName = extractMeta(html, "og:title") || extractTitleTag(html);
 
   // 최종 페이지가 아직 중간 안내 페이지로 보이면, 그 안의 JS/메타 리프레시를
@@ -155,14 +196,13 @@ async function scrapeUrl(url) {
   if (looksGeneric(productName)) {
     const nextUrl = findClientRedirect(html, finalUrl);
     if (nextUrl && nextUrl !== finalUrl) {
-      try {
-        const second = await fetchHtml(nextUrl);
+      const second = await fetchHtmlWithRetry(nextUrl);
+      if (second.ok) {
         html = second.html;
         finalUrl = second.finalUrl;
         productName = extractMeta(html, "og:title") || extractTitleTag(html);
-      } catch (e) {
-        // 두 번째 시도가 실패해도 첫 번째 결과라도 돌려줍니다.
       }
+      // 두 번째 시도가 실패해도 첫 번째 결과라도 돌려줍니다.
     }
   }
 
@@ -170,6 +210,7 @@ async function scrapeUrl(url) {
   const image = extractMeta(html, "og:image");
 
   return {
+    blocked: false,
     productName,
     productDesc,
     image,
