@@ -318,11 +318,52 @@
 
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .hamburger-btn{display:none;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink-soft);border-radius:8px;width:34px;height:34px;font-size:16px;
+    cursor:pointer;flex:none;margin-right:10px;}
+
+  /* ---- 모바일 반응형 ---- */
+  @media (max-width: 860px){
+    .hamburger-btn{display:block;}
+    .sidebar{position:fixed;top:0;bottom:0;left:0;width:250px;z-index:80;
+      transform:translateX(-100%);transition:transform .2s ease;box-shadow:8px 0 28px rgba(0,0,0,.18);}
+    .sidebar.open{transform:translateX(0);}
+    .sidebar-catcher{position:fixed;inset:0;background:rgba(20,26,22,.35);z-index:79;display:none;}
+    .sidebar-catcher.open{display:block;}
+
+    .topbar{padding:12px 14px;flex-wrap:wrap;gap:8px;}
+    .topbar-title{font-size:15px;flex:1;min-width:0;}
+    .header-right{gap:10px;}
+    .gate-badge div{white-space:nowrap;}
+    .theme-toggle{padding:6px 8px;font-size:11px;}
+
+    .layout{display:block;height:auto;}
+    .main{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .col{overflow-y:visible;width:100%;padding:16px;}
+    .col-form{border-right:none;border-bottom:1px solid var(--line);}
+    .col-preview{border-bottom:1px solid var(--line);}
+    .col-gate{border-left:none;}
+
+    .preview-card{padding:24px 18px 30px;}
+    .preview-viewport.mobile .preview-card{max-width:100%;}
+
+    .drawer{left:0;width:100%;max-width:340px;}
+    .modal-overlay{padding-top:0;align-items:center;padding-left:16px;padding-right:16px;}
+    .modal-card{width:100%;max-height:86vh;}
+
+    .actionbar{padding:10px 12px;flex-wrap:wrap;gap:8px;}
+    .save-status{order:3;width:100%;font-size:10.5px;}
+    .actionbar-btns{flex:1;justify-content:space-between;gap:6px;}
+    .btn-footer{padding:9px 10px;font-size:12px;flex:1;text-align:center;}
+
+    .done-total, .draft-item{font-size:12.5px;}
+  }
 </style>
 </head>
 <body>
 
-<aside class="sidebar">
+<div class="sidebar-catcher" id="sidebarCatcher"></div>
+<aside class="sidebar" id="sidebar">
   <div class="brand">
     <span class="mark">생활선택연구소</span>
     <span class="sub">블로그 비서</span>
@@ -342,6 +383,7 @@
 
 <div class="main">
   <div class="topbar">
+    <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="메뉴">☰</button>
     <div class="topbar-title" id="topbarTitle">새 글 작성</div>
     <div class="header-right">
       <div class="gate-badge" id="gateBadge">
@@ -620,6 +662,18 @@
     root.setAttribute('data-theme', now);
     document.getElementById('themeToggle').textContent = now === 'dark' ? '라이트 모드' : '다크 모드';
   });
+
+  // ---- 모바일 사이드바 (햄버거 메뉴) ----
+  function openSidebar(){
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarCatcher').classList.add('open');
+  }
+  function closeSidebar(){
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarCatcher').classList.remove('open');
+  }
+  document.getElementById('hamburgerBtn').addEventListener('click', openSidebar);
+  document.getElementById('sidebarCatcher').addEventListener('click', closeSidebar);
 
   // ---- used_product segmented ----
   const usedBtns = document.querySelectorAll('#usedToggle button');
@@ -1690,6 +1744,7 @@
   document.querySelectorAll('.navbtn').forEach(b=>{
     b.addEventListener('click', ()=>{
       const v = b.dataset.view;
+      closeSidebar();
       if(v==='done'){ openDoneDrawer(); }
       else if(v==='progress'){ openProgressModal(); }
       else if(v==='settings'){ openSettingsModal(); }
