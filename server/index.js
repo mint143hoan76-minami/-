@@ -7,7 +7,7 @@ const { buildDraftPrompt } = require("./prompts");
 const { generateDraftJson, suggestKeywords, extractFromPaste, extractFromImage } = require("./gemini");
 
 const app = express();
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ---- 상품 정보 자동 확인 (실제 서버 스크래핑 + 키워드 제안) ----
@@ -51,12 +51,14 @@ app.post("/api/extract", async (req, res) => {
   }
 });
 
-// ---- 자동 접속이 막힌 페이지용: 스크린샷 이미지에서 정보 정리 ----
+// ---- 자동 접속이 막힌 페이지용: 스크린샷 이미지(여러 장 가능)에서 정보 정리 ----
 app.post("/api/extract-image", async (req, res) => {
-  const { imageBase64, mimeType } = req.body || {};
-  if (!imageBase64) return res.status(400).json({ error: "이미지가 없습니다." });
+  const { images } = req.body || {};
+  if (!Array.isArray(images) || !images.length) {
+    return res.status(400).json({ error: "이미지가 없습니다." });
+  }
   try {
-    const info = await extractFromImage(imageBase64, mimeType);
+    const info = await extractFromImage(images);
     res.json(info);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
