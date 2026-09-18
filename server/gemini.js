@@ -1,7 +1,7 @@
-// 주 모델이 과부하(503)로 계속 막히면, 더 안정적인 대체 모델로 자동 전환합니다.
-// (새로 나온 모델일수록 초반에 수요가 몰려 503이 잦은 경향이 있어, 대체 모델을
-// 조금 더 이전 세대로 둡니다.)
-const MODELS = ["gemini-3.6-flash", "gemini-2.5-flash"];
+// 주 모델이 과부하(503)나 할당량 초과(429)로 막히면, 대체 모델로 자동 전환합니다.
+// gemini-2.5-flash는 신규 사용자에게 더 이상 제공되지 않아(404) 제외했고,
+// 대신 별도 할당량 풀을 쓰는 경량 모델(flash-lite)을 대체로 둡니다.
+const MODELS = ["gemini-3.6-flash", "gemini-3.5-flash-lite"];
 
 const MAX_RETRIES_PER_MODEL = 2;
 const RETRY_DELAYS_MS = [1200, 2500];
@@ -68,8 +68,18 @@ async function callGeminiWithRetry(requestBody, apiKey) {
         break;
       }
 
-      // 과부하·할당량이 아닌 다른 오류(잘못된 키, 요청 형식 등)는 모델을 바꿔도
-      // 똑같이 날 가능성이 높으므로 바로 던집니다.
+      if (res.status === 404) {
+        // 이 모델 자체가 단종/제공 중단된 경우입니다. 같은 모델을 재시도해도
+        // 의미가 없으니 바로 다음 모델로 넘어갑니다.
+        lastError = Object.assign(
+          new Error(`Gemini 모델을 찾을 수 없습니다 (404): ${body.slice(0, 300)}`),
+          { status: 404 }
+        );
+        break;
+      }
+
+      // 과부하·할당량·단종이 아닌 다른 오류(잘못된 키, 요청 형식 등)는 모델을
+      // 바꿔도 똑같이 날 가능성이 높으므로 바로 던집니다.
       throw Object.assign(
         new Error(`Gemini API 오류 (${res.status}): ${body.slice(0, 300)}`),
         { status: 502 }
