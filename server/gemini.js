@@ -30,9 +30,11 @@ async function callGeminiRaw(model, requestBody, apiKey) {
 }
 
 // requestBody(contents 등)를 받아 Gemini를 호출합니다.
-// 같은 모델에서 503이면 잠깐 쉬었다 재시도하고, 그 모델이 끝까지 막히면
-// 목록의 다음(더 안정적인) 모델로 넘어갑니다. 모든 모델이 다 막히면 마지막
-// 오류를 그대로 던집니다 (거짓으로 성공한 척하지 않음).
+// - 503(일시 과부하): 같은 모델로 잠깐 쉬었다 재시도하고, 그래도 안 되면 다음 모델로.
+// - 429(할당량 초과): 같은 모델로 재시도해도 소용없으므로(할당량이 그 자리에서
+//   다시 차지 않음) 바로 다음 모델로 넘어갑니다. 무료 요금제는 보통 모델별로
+//   할당량이 따로 계산되기 때문에, 한 모델이 다 찼어도 다른 모델은 남아있을 수 있습니다.
+// 모든 모델이 다 막히면 마지막 오류를 그대로 던집니다 (거짓으로 성공한 척하지 않음).
 async function callGeminiWithRetry(requestBody, apiKey) {
   let lastError;
   for (let m = 0; m < MODELS.length; m++) {
@@ -43,6 +45,7 @@ async function callGeminiWithRetry(requestBody, apiKey) {
         return res.json();
       }
       const body = await res.text().catch(() => "");
+
       if (isOverloaded(res.status, body)) {
         if (attempt < MAX_RETRIES_PER_MODEL) {
           await sleep(RETRY_DELAYS_MS[attempt]);
@@ -55,11 +58,21 @@ async function callGeminiWithRetry(requestBody, apiKey) {
         );
         break;
       }
-      // 과부하가 아닌 다른 오류(잘못된 키, 요청 형식 등)는 모델을 바꿔도
+
+      if (res.status === 429) {
+        // 할당량 초과는 기다린다고 풀리지 않으므로, 재시도 없이 바로 다음 모델로.
+        lastError = Object.assign(
+          new Error(`Gemini API 오류 (429): ${body.slice(0, 300)}`),
+          { status: 429 }
+        );
+        break;
+      }
+
+      // 과부하·할당량이 아닌 다른 오류(잘못된 키, 요청 형식 등)는 모델을 바꿔도
       // 똑같이 날 가능성이 높으므로 바로 던집니다.
       throw Object.assign(
         new Error(`Gemini API 오류 (${res.status}): ${body.slice(0, 300)}`),
-        { status: res.status === 429 ? 429 : 502 }
+        { status: 502 }
       );
     }
   }
