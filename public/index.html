@@ -1257,17 +1257,22 @@
     return html;
   }
 
-  // 화면에 보이지 않는 영역에 서식 있는 내용을 실제로 그려 넣고, 그 영역을
-  // 통째로 선택해서 복사합니다(execCommand). Clipboard API로 여러 형식을
-  // 한 번에 쓰는 방식보다 다른 사이트 에디터에 붙여넣을 때 서식이 더 안정적으로
-  // 살아남는 방식이라 이걸 기본으로 씁니다.
+  // 화면에 보이지 않게 서식 있는 내용을 실제로 그려 넣고, 그 영역을 통째로
+  // 선택해서 복사합니다(execCommand). Clipboard API가 막혀 있을 때의 대안입니다.
+  // (주의: left:-9999px처럼 화면 밖으로 완전히 밀어내면 일부 브라우저가
+  // "보이지 않는 요소"로 판단해 선택 자체를 무시하는 경우가 있어, 화면 안에
+  // 1px 크기로 두고 opacity로만 숨깁니다.)
   function copyRichHtml(html){
     const holder = document.createElement('div');
     holder.setAttribute('contenteditable', 'true');
     holder.style.position = 'fixed';
-    holder.style.left = '-9999px';
     holder.style.top = '0';
-    holder.style.whiteSpace = 'pre-wrap';
+    holder.style.left = '0';
+    holder.style.width = '1px';
+    holder.style.height = '1px';
+    holder.style.overflow = 'hidden';
+    holder.style.opacity = '0.01';
+    holder.style.pointerEvents = 'none';
     holder.innerHTML = html;
     document.body.appendChild(holder);
 
@@ -1289,29 +1294,47 @@
     const text = draftToPlainText();
     if(!text){ alert('아직 생성된 초안이 없어요.'); return; }
     const html = draftToHtml();
-    let done = copyRichHtml(html);
+    let method = null; // 'rich' | 'plain' | null
+    let lastErr = null;
 
-    if(!done && window.ClipboardItem){
+    // 1) 최신 Clipboard API로 서식 있는 복사를 먼저 시도합니다.
+    if(window.ClipboardItem){
       try{
         const item = new ClipboardItem({
           'text/plain': new Blob([text], { type: 'text/plain' }),
           'text/html': new Blob([html], { type: 'text/html' })
         });
         await navigator.clipboard.write([item]);
-        done = true;
-      }catch(e){ done = false; }
-    }
-    if(!done){
-      try{ await navigator.clipboard.writeText(text); done = true; }catch(e){ done = false; }
+        method = 'rich';
+      }catch(e){ lastErr = e; }
     }
 
-    if(done){
-      const t = document.getElementById('copyToast');
+    // 2) 실패하면 보이지 않는 편집 영역을 선택해 복사(execCommand)를 시도합니다.
+    if(!method){
+      try{
+        if(copyRichHtml(html)) method = 'rich';
+      }catch(e){ lastErr = e; }
+    }
+
+    // 3) 그래도 안 되면 서식 없이 글자만이라도 복사합니다.
+    if(!method){
+      try{
+        await navigator.clipboard.writeText(text);
+        method = 'plain';
+      }catch(e){ lastErr = e; }
+    }
+
+    const t = document.getElementById('copyToast');
+    if(method === 'rich'){
       t.textContent = '서식 있는 상태로 복사했어요 — 네이버 에디터에 붙여넣어보세요';
+    } else if(method === 'plain'){
+      t.textContent = '서식 복사는 실패해서 글자만 복사했어요';
+    }
+    if(method){
       t.classList.add('show');
       setTimeout(()=>{ t.classList.remove('show'); t.textContent='클립보드에 복사했어요'; }, 2200);
     } else {
-      alert('복사에 실패했어요. 직접 선택해 복사해주세요.');
+      alert('복사에 실패했어요: '+(lastErr && lastErr.message ? lastErr.message : '알 수 없는 오류')+'\n직접 선택해 복사해주세요.');
     }
   });
 
