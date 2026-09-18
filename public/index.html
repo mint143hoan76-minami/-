@@ -684,7 +684,7 @@
     {id:'keyword', label:'키워드 강조', calc:(d)=> !d ? {status:'idle', desc:'초안 생성 후 검사됩니다'} :
         (d.boldCount>=1 && d.boldCount<=6 ? {status:'pass', desc:'강조 '+d.boldCount+'회 — 적절한 범위'} : {status:'warn', desc:'강조 '+d.boldCount+'회 — 과다/과소 확인'})},
     {id:'structure', label:'구조 완성도', calc:(d)=> !d ? {status:'idle', desc:'초안 생성 후 검사됩니다'} :
-        (d.sections.length>=3 && d.faq.length>=1 ? {status:'pass', desc:'10블록 구조 충족'} : {status:'warn', desc:'섹션 또는 FAQ가 부족해요'})},
+        (d.sections.length>=5 && d.faq.length>=1 ? {status:'pass', desc:'단락 '+d.sections.length+'개 — 충분한 구조'} : {status:'warn', desc:'단락 '+d.sections.length+'개 — 5개 미만이거나 FAQ가 부족해요'})},
     {id:'grounding', label:'상품 사실성 · 미확인 정보', calc:(d)=> !d ? {status:'idle', desc:'초안 생성 후 검사됩니다'} :
         (d.groundingMissing.length ? {status:'warn', desc:'입력한 정보에 없는 수치: '+d.groundingMissing.join(', ')+' — 사실인지 확인해주세요'} :
           {status:'pass', desc:'본문 수치가 입력 정보 범위 안에 있어요'})},
@@ -943,13 +943,8 @@
       titleCandidates: Array.isArray(d.titles) ? d.titles : [],
       selectedTitle: (Array.isArray(d.titles) && d.titles[0]) || '',
       intro: d.intro || '',
-      sections: [
-        { heading: '한눈에 보는 제품 정보', body: d.coreInfo || '' },
-        { heading: '왜 확인할 상품인가', body: d.why || '' },
-        { heading: '상세 정보', body: d.details || '' },
-        { heading: usedYes ? '실사용 후기' : '구매가이드', body: d.guideOrReview || '' }
-      ],
-      recommendReasons: d.audience ? [d.audience] : [],
+      sections: Array.isArray(d.sections) ? d.sections : [],
+      recommendReasons: Array.isArray(d.audience) ? d.audience : (d.audience ? [d.audience] : []),
       faq: Array.isArray(d.faq) ? d.faq : [],
       conclusion: d.conclusion || '',
       tags: Array.isArray(d.tags) ? d.tags : [],
