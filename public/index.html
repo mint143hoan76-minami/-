@@ -420,7 +420,7 @@
       <div class="field" id="imageParseField">
         <label for="screenshotInput">또는 스크린샷 업로드 (여러 장 가능)</label>
         <input type="file" id="screenshotInput" accept="image/*" multiple>
-        <div class="hint">한 페이지를 나눠 찍었다면 여러 장을 한 번에 선택하거나, 이 화면 아무 곳에서나 Ctrl+V(Mac: Cmd+V)로 계속 붙여넣어 쌓을 수 있어요. (최대 5장)</div>
+        <div class="hint">한 페이지를 나눠 찍었다면 여러 장을 한 번에 선택하거나, 이 화면 아무 곳에서나 Ctrl+V(Mac: Cmd+V)로 계속 붙여넣어 쌓을 수 있어요. (최대 10장)</div>
         <div id="imageChipList" class="chips" style="margin-top:8px;"></div>
         <button type="button" class="btn-secondary" id="parseImageBtn" style="margin-top:6px;">이미지에서 정리</button>
       </div>
@@ -967,7 +967,7 @@
   });
 
   // ---- 스크린샷 여러 장 첨부 (파일 선택 + Ctrl/Cmd+V 붙여넣기 모두 같은 목록에 쌓임) ----
-  const MAX_SCREENSHOTS = 5;
+  const MAX_SCREENSHOTS = 10;
   const pendingImages = []; // { name, mimeType, base64 }
 
   function renderImageChips(){
