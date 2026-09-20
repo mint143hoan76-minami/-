@@ -32,8 +32,8 @@ async function callGeminiRaw(model, requestBody, apiKey) {
 // requestBody(contents 등)를 받아 Gemini를 호출합니다.
 // - 503(일시 과부하): 같은 모델로 잠깐 쉬었다 재시도하고, 그래도 안 되면 다음 모델로.
 // - 429(할당량 초과): 같은 모델로 재시도해도 소용없으므로(할당량이 그 자리에서
-//   다시 차지 않음) 바로 다음 모델로 넘어갑니다. 무료 요금제는 보통 모델별로
-//   할당량이 따로 계산되기 때문에, 한 모델이 다 찼어도 다른 모델은 남아있을 수 있습니다.
+//   다시 차지 않음) 바로 다음 모델로 넘어갑니다.
+// - 404(모델 단종/제공 중단): 마찬가지로 재시도 없이 바로 다음 모델로.
 // 모든 모델이 다 막히면 마지막 오류를 그대로 던집니다 (거짓으로 성공한 척하지 않음).
 async function callGeminiWithRetry(requestBody, apiKey) {
   let lastError;
@@ -51,7 +51,6 @@ async function callGeminiWithRetry(requestBody, apiKey) {
           await sleep(RETRY_DELAYS_MS[attempt]);
           continue;
         }
-        // 이 모델은 재시도를 다 썼습니다 — 다음 모델로 넘어갑니다.
         lastError = Object.assign(
           new Error(`Gemini API 오류 (${res.status}): ${body.slice(0, 300)}`),
           { status: 503 }
@@ -60,7 +59,6 @@ async function callGeminiWithRetry(requestBody, apiKey) {
       }
 
       if (res.status === 429) {
-        // 할당량 초과는 기다린다고 풀리지 않으므로, 재시도 없이 바로 다음 모델로.
         lastError = Object.assign(
           new Error(`Gemini API 오류 (429): ${body.slice(0, 300)}`),
           { status: 429 }
@@ -69,8 +67,6 @@ async function callGeminiWithRetry(requestBody, apiKey) {
       }
 
       if (res.status === 404) {
-        // 이 모델 자체가 단종/제공 중단된 경우입니다. 같은 모델을 재시도해도
-        // 의미가 없으니 바로 다음 모델로 넘어갑니다.
         lastError = Object.assign(
           new Error(`Gemini 모델을 찾을 수 없습니다 (404): ${body.slice(0, 300)}`),
           { status: 404 }
@@ -117,7 +113,6 @@ async function callGemini(promptText) {
   const data = await callGeminiWithRetry(
     {
       contents: [{ parts: [{ text: promptText }] }],
-      // Gemini가 마크다운 코드펜스 없이 순수 JSON만 반환하도록 강제합니다.
       generationConfig: { responseMimeType: "application/json" },
     },
     apiKey
@@ -125,7 +120,6 @@ async function callGemini(promptText) {
   return extractText(data);
 }
 
-// responseMimeType을 지정해도 만약을 대비해 관대하게 파싱합니다.
 function parseJsonLoose(text) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
@@ -147,8 +141,6 @@ async function generateDraftJson(promptText) {
   }
 }
 
-// 스크래핑으로 확인된 상품명/설명만 근거로 키워드·강조 포인트 후보를 제안합니다.
-// (없는 사실을 만들어내지 않도록 상품 정보 외 다른 입력은 주지 않습니다.)
 async function suggestKeywords(productName, productDesc) {
   const prompt = `다음은 실제로 확인된 상품 정보입니다. 이 안의 내용만 근거로 핵심 키워드 후보와 강조 포인트 후보를 추출하세요. 정보에 없는 내용을 추측해서 만들지 마세요.
 
@@ -161,8 +153,6 @@ async function suggestKeywords(productName, productDesc) {
   return parseJsonLoose(text);
 }
 
-// 자동 접속이 막힌 상품 페이지용: 사용자가 직접 자기 브라우저로 열어서
-// 복사해 붙여넣은 원문 텍스트에서 상품 정보를 정리합니다.
 async function extractFromPaste(rawText) {
   const snippet = (rawText || "").slice(0, 6000);
   const prompt = `다음은 사용자가 어떤 쇼핑 상품 페이지에서 직접 복사해 붙여넣은 텍스트입니다. 이 안에 실제로 있는 정보만 사용해서 아래 항목을 추출하세요. 없는 내용을 추측해서 만들지 마세요.
@@ -180,7 +170,7 @@ ${snippet}
 // 상품 정보를 정리합니다. Gemini의 이미지 인식(멀티모달) 기능을 사용합니다.
 // images: [{ data: base64문자열, mimeType }, ...] — 한 상품 페이지를 여러 장으로
 // 나눠 찍은 스크린샷을 한 번에 보낼 수 있도록, 한 번의 요청에 모두 담아 보냅니다.
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 10;
 
 async function extractFromImage(images) {
   const apiKey = process.env.GEMINI_API_KEY;
