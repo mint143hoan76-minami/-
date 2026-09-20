@@ -1103,7 +1103,9 @@
     return EXPOSURE_WORDS.filter(w=> text.includes(w));
   }
   function mdBold(text){
-    return (text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+    return (text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n/g,'<br>');
   }
 
   function renderDraft(d){
@@ -1238,7 +1240,8 @@
   function mdBoldInline(text, color){
     const c = color || 'var(--accent-ink)';
     return (text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/\*\*([^*]+)\*\*/g,'<b style="color:'+c+';">$1</b>');
+      .replace(/\*\*([^*]+)\*\*/g,'<b style="color:'+c+';">$1</b>')
+      .replace(/\n/g,'<br>');
   }
   function draftToHtml(){
     const d = state.draft;
