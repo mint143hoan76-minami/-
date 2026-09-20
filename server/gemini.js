@@ -129,10 +129,37 @@ function parseJsonLoose(text) {
   return JSON.parse(slice);
 }
 
+// AI에게 "문장마다 줄바꿈을 넣어라"고 프롬프트로만 지시하면 자주 무시되므로,
+// 응답을 받은 뒤 서버가 직접 문장 단위로 줄바꿈을 넣습니다. 한국어 평서문
+// 종결어미(다/요) 바로 뒤에 오는 마침표를 문장 경계로 보고 그 뒤에서 줄을 바꿉니다.
+// ("3.5mg"처럼 숫자 사이의 마침표나 괄호 안의 구두점은 이 패턴에 걸리지 않아
+// 잘못 끊기지 않습니다.)
+function insertSentenceBreaks(text) {
+  if (!text) return text;
+  return text
+    .replace(/\n+/g, "\n") // 이미 있는 줄바꿈은 중복되지 않게 정리
+    .split("\n")
+    .map((line) => line.replace(/([다요])\.\s*/g, "$1.\n").trim())
+    .join("\n")
+    .trim();
+}
+
+function applySentenceBreaks(draft) {
+  if (draft.intro) draft.intro = insertSentenceBreaks(draft.intro);
+  if (draft.conclusion) draft.conclusion = insertSentenceBreaks(draft.conclusion);
+  if (Array.isArray(draft.sections)) {
+    draft.sections = draft.sections.map((s) => ({
+      ...s,
+      body: insertSentenceBreaks(s.body),
+    }));
+  }
+  return draft;
+}
+
 async function generateDraftJson(promptText) {
   const text = await callGemini(promptText);
   try {
-    return parseJsonLoose(text);
+    return applySentenceBreaks(parseJsonLoose(text));
   } catch (e) {
     throw Object.assign(
       new Error("AI 응답을 JSON으로 해석하지 못했습니다. 다시 시도해 주세요."),
