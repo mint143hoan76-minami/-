@@ -205,6 +205,8 @@
   .section-card .p-section:first-of-type{border-top:none;padding-top:10px;}
   .section-card .p-section:last-child{padding-bottom:18px;}
   .p-h2{font-family:var(--font-voice);font-weight:700;font-size:16px;margin:0 0 8px;}
+  .p-h2-plain{font-family:var(--font-voice);font-weight:700;font-size:16px;margin:0 0 8px;color:var(--accent-ink);}
+  .p-section-plain{margin-bottom:24px;}
   .p-body{font-size:14px;line-height:1.85;color:var(--ink);}
   .p-body strong{color:var(--accent-ink);font-weight:700;}
   .img-slot{border:1px dashed var(--line);border-radius:8px;background:var(--surface-2);
@@ -1122,12 +1124,15 @@
     html += '<div class="p-byline"><span class="dot"></span>생활선택연구소 · 초안 생성됨</div>';
     if(d.intro) html += '<div class="p-intro">'+mdBold(d.intro)+'</div>';
     if((d.sections||[]).length){
+      const first = d.sections[0];
       html += '<div class="section-card"><div class="section-eyebrow">한눈에 보는 제품 정보</div>';
-      (d.sections||[]).forEach(s=>{
-        html += '<div class="p-section"><div class="p-h2">'+ (s.heading||'') +'</div>';
+      html += '<div class="p-section"><div class="p-h2">'+ (first.heading||'') +'</div>';
+      html += '<div class="p-body">'+mdBold(first.body)+'</div></div>';
+      html += '</div>';
+      d.sections.slice(1).forEach(s=>{
+        html += '<div class="p-section-plain"><div class="p-h2-plain">'+ (s.heading||'') +'</div>';
         html += '<div class="p-body">'+mdBold(s.body)+'</div></div>';
       });
-      html += '</div>';
     }
     if(d.recommendReasons && d.recommendReasons.length){
       html += '<div class="p-section"><div class="p-h2">추천 대상</div><ul class="p-list">';
@@ -1255,17 +1260,21 @@
     }
 
     if((d.sections||[]).length){
+      const first = d.sections[0];
       html += '<div style="border:1px solid '+LINE+'; border-left:4px solid '+ACCENT+'; '
         + 'border-radius:0 10px 10px 0; margin:0 0 26px; overflow:hidden;">';
       html += '<div style="font-size:12px; font-weight:700; color:'+ACCENT+'; padding:16px 20px 0; letter-spacing:.02em;">한눈에 보는 제품 정보</div>';
-      d.sections.forEach((s, i)=>{
-        const borderTop = i>0 ? ('border-top:1px solid '+LINE+';') : '';
-        html += '<div style="padding:14px 20px; '+borderTop+'">';
-        html += '<div style="font-size:16px; font-weight:700; margin:0 0 8px; color:'+INK+';">'+mdBoldInline(s.heading||'', ACCENT)+'</div>';
+      html += '<div style="padding:14px 20px;">';
+      html += '<div style="font-size:16px; font-weight:700; margin:0 0 8px; color:'+INK+';">'+mdBoldInline(first.heading||'', ACCENT)+'</div>';
+      html += '<div style="font-size:14.5px; line-height:1.85; color:'+INK+';">'+mdBoldInline(first.body||'', ACCENT)+'</div>';
+      html += '</div></div>';
+
+      d.sections.slice(1).forEach(s=>{
+        html += '<div style="margin:0 0 24px;">';
+        html += '<div style="font-size:16px; font-weight:700; margin:0 0 8px; color:'+ACCENT+';">'+mdBoldInline(s.heading||'', ACCENT)+'</div>';
         html += '<div style="font-size:14.5px; line-height:1.85; color:'+INK+';">'+mdBoldInline(s.body||'', ACCENT)+'</div>';
         html += '</div>';
       });
-      html += '</div>';
     }
 
     if(d.recommendReasons && d.recommendReasons.length){
